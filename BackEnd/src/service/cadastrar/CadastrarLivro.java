@@ -1,4 +1,4 @@
-package BackEnd.service.cadastrar;
+package BackEnd.src.service.cadastrar;
 
 public class CadastrarLivro implements Cadastrar {
 

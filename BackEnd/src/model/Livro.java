@@ -1,4 +1,4 @@
-package BackEnd.model;
+package BackEnd.src.model;
 
 public class Livro {
 

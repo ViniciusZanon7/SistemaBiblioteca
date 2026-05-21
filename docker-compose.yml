@@ -1,0 +1,43 @@
+version: "3.8"
+
+services:
+  banco:
+    image: postgres:15-alpine
+    container_name: meu_banco_local
+    environment:
+      POSTGRES_USER: usuario_banco
+      POSTGRES_PASSWORD: senha_banco
+      POSTGRES_DB: meu_banco
+    ports:
+      - "5432:5432"
+    volumes:
+      - dados_banco:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ./BackEnd
+    container_name: meu_backend_local
+    ports:
+      - "8080:8080"
+    depends_on:
+      - banco
+    volumes:
+      - ./BackEnd:/app
+    develop:
+      watch:
+        - action: rebuild
+          path: ./BackEnd/src
+
+  frontend:
+    build:
+      context: ./FrontEnd
+    container_name: meu_frontend_local
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    volumes:
+      - ./FrontEnd:/usr/share/nginx/html
+
+volumes:
+  dados_banco:
