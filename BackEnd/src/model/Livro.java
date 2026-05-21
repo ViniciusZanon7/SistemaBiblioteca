@@ -5,13 +5,17 @@ public class Livro {
     private String nomeAutor;
     private String tituloLivro;
     private String editora;
+    private int quantidade;
     private int anoPublicacao;
+    private GeneroLivro generoLivro;
 
-    public Livro(String nomeAutor, String tituloLivro, String editora, int anoPublicacao) {
+    public Livro(String nomeAutor, String tituloLivro, String editora, int quantidade, int anoPublicacao, GeneroLivro generoLivro) {
         this.nomeAutor = nomeAutor;
         this.tituloLivro = tituloLivro;
         this.editora = editora;
+        this.quantidade = quantidade;
         this.anoPublicacao = anoPublicacao;
+        this.generoLivro = generoLivro;
     }
     public String getNomeAutor() {
         return nomeAutor;
@@ -22,8 +26,14 @@ public class Livro {
     public String getEditora() {
         return editora;
     }
+    public int getQuantidade() {
+        return quantidade;
+    }
     public int getAnoPublicacao() {
         return anoPublicacao;
+    }
+    public GeneroLivro getGeneroLivro() {
+        return generoLivro;
     }
     public void setNomeAutor(String nomeAutor) {
         this.nomeAutor = nomeAutor;
@@ -34,8 +44,14 @@ public class Livro {
     public void setEditora(String editora) {
         this.editora = editora;
     }
+    public void setQuantidade(int quantidade) {
+        this.quantidade = quantidade;
+    }
     public void setAnoPublicacao(int anoPublicacao) {
         this.anoPublicacao = anoPublicacao;
+    }
+    public void setGeneroLivro(GeneroLivro generoLivro) {
+        this.generoLivro = generoLivro;
     }
 
 }
