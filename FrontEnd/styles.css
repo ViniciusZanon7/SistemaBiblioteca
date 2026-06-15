@@ -334,6 +334,19 @@ textarea:focus {
   border-color: var(--brand-blue-2);
 }
 
+.primary-button:disabled,
+.ghost-button:disabled,
+.small-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.primary-button:disabled:hover,
+.ghost-button:disabled:hover,
+.small-button:disabled:hover {
+  box-shadow: none;
+}
+
 .primary-button.danger {
   background: var(--danger);
   border-color: var(--danger);
@@ -348,6 +361,12 @@ textarea:focus {
   color: var(--brand-blue);
   background: var(--white);
   border: 1px solid var(--line);
+}
+
+.ghost-button.compact {
+  min-height: 36px;
+  padding: 7px 11px;
+  font-size: 0.8rem;
 }
 
 .ghost-button:hover,
@@ -924,6 +943,7 @@ textarea:focus {
 .catalog-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: stretch;
   gap: 16px;
 }
 
@@ -980,8 +1000,10 @@ textarea:focus {
 .book-card {
   display: grid;
   grid-template-columns: 96px minmax(0, 1fr);
+  align-items: stretch;
   gap: 15px;
-  min-height: 178px;
+  height: 100%;
+  min-height: 216px;
   padding: 14px;
 }
 
@@ -990,6 +1012,7 @@ textarea:focus {
   display: grid;
   place-items: center;
   width: 96px;
+  height: 100%;
   min-height: 150px;
   color: var(--white);
   background: var(--book-blue);
@@ -1013,7 +1036,11 @@ textarea:focus {
 
 .book-card-content {
   display: grid;
-  align-content: start;
+  grid-template-rows: 2.55em 1.35em minmax(72px, 1fr) auto;
+  align-content: stretch;
+  row-gap: 8px;
+  height: 100%;
+  min-height: 150px;
   min-width: 0;
 }
 
@@ -1022,6 +1049,11 @@ textarea:focus {
   color: var(--ink);
   font-size: 1.04rem;
   line-height: 1.22;
+  min-height: calc(1.22em * 2);
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .book-card p,
@@ -1030,11 +1062,22 @@ textarea:focus {
   color: var(--muted);
 }
 
+.book-card p {
+  margin: 0;
+  min-height: 1.35em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .tag-row {
+  align-self: start;
   display: flex;
   flex-wrap: wrap;
+  align-content: start;
   gap: 6px;
-  margin-top: 12px;
+  margin-top: 0;
+  min-height: 58px;
 }
 
 .tag,
@@ -1079,6 +1122,11 @@ textarea:focus {
   flex-wrap: wrap;
   gap: 9px;
   margin-top: 15px;
+}
+
+.book-card-actions {
+  align-self: end;
+  margin-top: 0;
 }
 
 .small-button {
@@ -1287,6 +1335,15 @@ textarea:focus {
   backdrop-filter: blur(4px);
 }
 
+#confirmModal {
+  z-index: 1000;
+}
+
+#confirmModal .modal-card {
+  position: relative;
+  z-index: 1001;
+}
+
 .loading-screen {
   position: fixed;
   inset: 0;
@@ -1337,6 +1394,312 @@ textarea:focus {
 .modal-card p {
   margin: 10px 0 0;
   color: var(--muted);
+}
+
+.rental-modal-card {
+  width: min(760px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  align-self: center;
+  justify-self: center;
+}
+
+#rentalModal.is-anchored {
+  place-items: start center;
+  padding-top: var(--rental-modal-top, 20px);
+}
+
+#rentalModal.is-anchored .rental-modal-card {
+  align-self: start;
+  max-height: calc(100vh - var(--rental-modal-top, 20px) - 20px);
+}
+
+.student-loans-modal-card {
+  width: min(900px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+}
+
+.rental-modal-head,
+.rental-section-title,
+.rental-selected-card,
+.rental-student-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.rental-modal-head h2 {
+  margin-top: 6px;
+}
+
+.modal-close-button {
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  color: var(--brand-blue);
+  background: var(--brand-blue-3);
+  border: 1px solid #bfd9ea;
+  border-radius: 8px;
+}
+
+.modal-close-button svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.2;
+}
+
+.rental-book-card {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  gap: 14px;
+  margin-top: 16px;
+  padding: 13px;
+  background: #f8fbfe;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.rental-book-card .book-cover {
+  width: 82px;
+  min-height: 118px;
+}
+
+.rental-book-card h3 {
+  margin: 0;
+  color: var(--brand-blue);
+  font-size: 1.12rem;
+  line-height: 1.2;
+}
+
+.rental-book-card p {
+  margin-top: 5px;
+}
+
+.rental-book-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.rental-book-stats span {
+  padding: 10px 11px;
+  color: var(--muted);
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.rental-book-stats strong {
+  display: block;
+  margin-top: 2px;
+  color: var(--brand-blue);
+  font-size: 1.12rem;
+}
+
+.rental-loan-list {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rental-loan-list li,
+.rental-muted,
+.rental-placeholder {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.rental-loan-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.rental-loan-list span {
+  color: var(--brand-blue);
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.rental-flow {
+  display: grid;
+  gap: 12px;
+}
+
+.rental-section,
+.rental-student-form {
+  padding: 16px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.rental-section-title strong {
+  display: block;
+  color: var(--brand-blue);
+  font-size: 0.98rem;
+}
+
+.rental-section-title span {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.rental-search {
+  display: block;
+  margin-top: 12px;
+}
+
+.rental-selected {
+  margin-top: 12px;
+}
+
+.rental-selected-card,
+.rental-placeholder {
+  min-height: 54px;
+  padding: 11px 12px;
+  background: var(--brand-blue-3);
+  border: 1px solid #bfd9ea;
+  border-radius: 8px;
+}
+
+.rental-selected-card.has-warning {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.rental-selected-card strong,
+.rental-student-option strong {
+  display: block;
+  color: var(--ink);
+}
+
+.rental-selected-card span,
+.rental-student-option small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.rental-selected-card small {
+  color: var(--brand-blue);
+  font-size: 0.78rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.rental-student-results {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  max-height: 330px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.rental-inline-hint {
+  margin: 0;
+  padding: 12px;
+  color: var(--muted);
+  background: #f8fbfe;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  font-size: 0.88rem;
+  text-align: center;
+}
+
+.rental-student-option {
+  width: 100%;
+  padding: 11px 12px;
+  color: inherit;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  text-align: left;
+}
+
+.rental-student-option:hover,
+.rental-student-option.is-selected {
+  background: #f8fbfe;
+  border-color: #bfd9ea;
+  box-shadow: 0 0 0 4px rgba(53, 182, 180, 0.1);
+}
+
+.rental-student-option:disabled {
+  background: #fafafa;
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.rental-student-meta {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.rental-student-meta em {
+  color: var(--warning);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.rental-student-form {
+  display: grid;
+  gap: 12px;
+  background: #f8fbfe;
+}
+
+.compact-empty {
+  margin-top: 10px;
+  padding: 13px;
+}
+
+.student-loan-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0 12px;
+}
+
+.student-loan-summary span {
+  padding: 12px;
+  color: var(--muted);
+  background: #f8fbfe;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.student-loan-summary strong {
+  display: block;
+  margin-top: 2px;
+  color: var(--brand-blue);
+  font-size: 1.12rem;
+}
+
+.student-loans-table {
+  min-width: 780px;
 }
 
 .modal-actions {
@@ -1467,7 +1830,9 @@ textarea:focus {
   .filters-panel,
   .detail-facts,
   .form-row,
-  .book-card {
+  .book-card,
+  .rental-book-card,
+  .rental-book-stats {
     grid-template-columns: 1fr;
   }
 
@@ -1484,6 +1849,23 @@ textarea:focus {
   .book-cover {
     width: 100%;
     min-height: 150px;
+  }
+
+  .rental-book-card .book-cover {
+    width: 100%;
+    min-height: 190px;
+  }
+
+  .rental-modal-head,
+  .rental-section-title,
+  .rental-selected-card,
+  .rental-student-option {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .rental-student-meta {
+    justify-items: start;
   }
 
   .book-main-card .book-cover {

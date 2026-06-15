@@ -101,11 +101,28 @@ public class BibliotecaService {
     }
 
     public void registrarEmprestimo(long usuarioId, long livroId) throws SQLException {
+        if (usuarioPossuiEmprestimoAtivo(usuarioId)) {
+            throw new IllegalArgumentException("Usuario ja possui emprestimo ativo");
+        }
+
         if (!livroDisponivel(livroId)) {
             throw new IllegalArgumentException("Livro indisponivel para emprestimo");
         }
 
         repository.registrarEmprestimo(usuarioId, livroId);
+    }
+
+    private boolean usuarioPossuiEmprestimoAtivo(long usuarioId) throws SQLException {
+        for (Emprestimo emprestimo : repository.listarEmprestimos()) {
+            boolean mesmoUsuario = emprestimo.getUsuarioId() == usuarioId;
+            boolean ativo = "emprestado".equals(emprestimo.getStatus()) && emprestimo.getDataDevolucao() == null;
+
+            if (mesmoUsuario && ativo) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public double calcularMulta(Emprestimo emprestimo) {

@@ -9,7 +9,7 @@
     />
     <title>Sistema Bibliotecário UniCuritiba</title>
     <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="./styles.css?v=students-admin-20260606" />
+    <link rel="stylesheet" href="./styles.css?v=modal-card-fix-20260614" />
   </head>
   <body>
     <main class="login-screen" id="loginScreen">
@@ -468,7 +468,97 @@
       </div>
     </div>
 
+    <div class="modal-backdrop is-hidden" id="rentalModal" role="dialog" aria-modal="true">
+      <div class="modal-card rental-modal-card">
+        <div class="rental-modal-head">
+          <div>
+            <span class="eyebrow" id="rentalModalEyebrow">Empréstimo</span>
+            <h2 id="rentalModalTitle">Registrar aluguel</h2>
+          </div>
+          <button class="icon-button modal-close-button" type="button" id="closeRentalModalButton" aria-label="Fechar">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 6l12 12" />
+              <path d="M18 6 6 18" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="rental-flow" id="rentalSelectStep">
+          <div id="rentalBookSummary"></div>
+          <div class="rental-section">
+            <div class="rental-section-title">
+              <div>
+                <strong>Aluno</strong>
+              </div>
+              <button class="ghost-button compact" type="button" id="toggleRentalStudentFormButton">
+                Novo aluno
+              </button>
+            </div>
+
+            <label class="search-control rental-search">
+              <span class="sr-only">Pesquisar aluno</span>
+              <input id="rentalStudentSearchInput" type="search" placeholder="Buscar aluno cadastrado" />
+            </label>
+
+            <div class="rental-selected" id="rentalSelectedStudent"></div>
+            <div class="rental-student-results" id="rentalStudentResults"></div>
+          </div>
+        </div>
+
+        <form class="rental-student-form is-hidden" id="rentalStudentForm">
+          <label>
+            <span>Nome completo</span>
+            <input name="nome" type="text" placeholder="Ex.: Maria Eduarda Silva" required />
+          </label>
+          <div class="form-row">
+            <label>
+              <span>E-mail</span>
+              <input name="email" type="email" placeholder="maria@ulife.com.br" required />
+            </label>
+            <label>
+              <span>CPF</span>
+              <input name="CPF" type="text" placeholder="000.000.000-00" required />
+            </label>
+          </div>
+          <label>
+            <span>Telefone</span>
+            <input name="telefone" type="tel" placeholder="(41) 99999-9999" />
+          </label>
+          <div class="form-actions">
+            <button class="primary-button" type="submit" id="rentalStudentSubmitButton">Cadastrar</button>
+            <button class="ghost-button" type="button" id="cancelRentalStudentFormButton">Cancelar</button>
+          </div>
+        </form>
+
+        <div class="modal-actions" id="rentalActions">
+          <button class="ghost-button" type="button" id="cancelRentalButton">Cancelar</button>
+          <button class="primary-button" type="button" id="confirmRentalButton">Confirmar empréstimo</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-backdrop is-hidden" id="studentLoansModal" role="dialog" aria-modal="true">
+      <div class="modal-card student-loans-modal-card">
+        <div class="rental-modal-head">
+          <div>
+            <span class="eyebrow">Aluno</span>
+            <h2 id="studentLoansTitle">Empréstimos</h2>
+          </div>
+          <button class="icon-button modal-close-button" type="button" id="closeStudentLoansModalButton" aria-label="Fechar">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 6l12 12" />
+              <path d="M18 6 6 18" />
+            </svg>
+          </button>
+        </div>
+        <div id="studentLoansContent"></div>
+        <div class="modal-actions">
+          <button class="ghost-button" type="button" id="cancelStudentLoansModalButton">Fechar</button>
+        </div>
+      </div>
+    </div>
+
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="./app.js?v=students-admin-20260606"></script>
+    <script src="./app.js?v=front-fast-actions-20260614"></script>
   </body>
 </html>

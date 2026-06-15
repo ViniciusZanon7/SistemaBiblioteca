@@ -6,13 +6,24 @@ import java.sql.SQLException;
 
 public class ConexaoBanco {
 
-    private static final String URL = System.getenv("JDBC_DATABASE_URL");
-    private static final String USER = System.getenv("DB_USER");
-    private static final String PASSWORD = System.getenv("DB_PASSWORD");
-
     public Connection conectar() throws SQLException {
         carregarDriver();
-        return DriverManager.getConnection(URL, USER, PASSWORD);
+
+        String url = obterEnvObrigatoria("JDBC_DATABASE_URL");
+        String usuario = obterEnvObrigatoria("DB_USER");
+        String senha = obterEnvObrigatoria("DB_PASSWORD");
+
+        return DriverManager.getConnection(url, usuario, senha);
+    }
+
+    private String obterEnvObrigatoria(String nome) throws SQLException {
+        String valor = System.getenv(nome);
+
+        if (valor == null || valor.isBlank()) {
+            throw new SQLException("Variavel de ambiente obrigatoria nao definida: " + nome);
+        }
+
+        return valor;
     }
 
     private void carregarDriver() throws SQLException {

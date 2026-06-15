@@ -23,7 +23,7 @@ public class BibliotecaHandler implements HttpHandler {
     public void handle(HttpExchange exchange) throws IOException {
         try {
             if (exchange.getRequestMethod().equals("OPTIONS")) {
-                responder(exchange, 200, "{\"ok\":true}");
+                responder(exchange, 204, "");
                 return;
             }
 

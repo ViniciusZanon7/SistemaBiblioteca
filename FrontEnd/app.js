@@ -1,16 +1,18 @@
-const API_DEFAULT = "http://localhost:8080/api";
+const API_DEFAULT = location.port === "" || location.port === "80"
+  ? "/api"
+  : "http://localhost:8080/api";
 const CATALOG_PAGE_SIZE = 12;
-const API_TIMEOUT_MS = 1800;
+const API_TIMEOUT_MS = 15000;
+const LOGIN_TIMEOUT_MS = 9000;
 const STORAGE = {
   admin: "bibliotecaAdminSession",
-  api: "bibliotecaApiUrl",
 };
 const DAY_MS = 24 * 60 * 60 * 1000;
 const LOAN_DAYS = 14;
 const DAILY_FINE = 2;
 
 const state = {
-  apiBase: localStorage.getItem(STORAGE.api) || API_DEFAULT,
+  apiBase: API_DEFAULT,
   apiOnline: false,
   admin: null,
   books: [],
@@ -30,8 +32,18 @@ const state = {
   selectedLoanId: null,
   selectedBookId: null,
   selectedUserId: null,
+  rentalBookId: null,
+  rentalUserId: null,
+  rentalSearch: "",
+  rentalMode: "select",
+  studentLoansUserId: null,
+  returnContext: null,
   bookEditReturnHash: null,
   loginFeedbackTimer: null,
+  savingBook: false,
+  savingUser: false,
+  savingRental: false,
+  savingRentalUser: false,
 };
 
 const elements = {};
@@ -43,14 +55,12 @@ function init() {
   bindEvents();
   setTodayLabel();
 
-  state.admin = readJson(STORAGE.admin, null);
-  if (state.admin?.validated) {
-    showApp();
-    loadData();
-  } else {
-    localStorage.removeItem(STORAGE.admin);
-    state.admin = null;
-    showLogin();
+  localStorage.removeItem(STORAGE.admin);
+  state.admin = null;
+  showLogin();
+
+  if (location.hash !== "#login") {
+    location.hash = "#login";
   }
 
   route();
@@ -144,6 +154,39 @@ function cacheElements() {
   elements.confirmDeleteUserButton = document.querySelector(
     "#confirmDeleteUserButton",
   );
+  elements.rentalModal = document.querySelector("#rentalModal");
+  elements.rentalModalEyebrow = document.querySelector("#rentalModalEyebrow");
+  elements.rentalModalTitle = document.querySelector("#rentalModalTitle");
+  elements.rentalSelectStep = document.querySelector("#rentalSelectStep");
+  elements.rentalBookSummary = document.querySelector("#rentalBookSummary");
+  elements.rentalStudentSearchInput = document.querySelector(
+    "#rentalStudentSearchInput",
+  );
+  elements.rentalSelectedStudent = document.querySelector("#rentalSelectedStudent");
+  elements.rentalStudentResults = document.querySelector("#rentalStudentResults");
+  elements.rentalStudentForm = document.querySelector("#rentalStudentForm");
+  elements.rentalStudentSubmitButton = document.querySelector(
+    "#rentalStudentSubmitButton",
+  );
+  elements.toggleRentalStudentFormButton = document.querySelector(
+    "#toggleRentalStudentFormButton",
+  );
+  elements.cancelRentalStudentFormButton = document.querySelector(
+    "#cancelRentalStudentFormButton",
+  );
+  elements.closeRentalModalButton = document.querySelector("#closeRentalModalButton");
+  elements.cancelRentalButton = document.querySelector("#cancelRentalButton");
+  elements.confirmRentalButton = document.querySelector("#confirmRentalButton");
+  elements.rentalActions = document.querySelector("#rentalActions");
+  elements.studentLoansModal = document.querySelector("#studentLoansModal");
+  elements.studentLoansTitle = document.querySelector("#studentLoansTitle");
+  elements.studentLoansContent = document.querySelector("#studentLoansContent");
+  elements.closeStudentLoansModalButton = document.querySelector(
+    "#closeStudentLoansModalButton",
+  );
+  elements.cancelStudentLoansModalButton = document.querySelector(
+    "#cancelStudentLoansModalButton",
+  );
   elements.loadingScreen = document.querySelector("#loadingScreen");
   elements.toast = document.querySelector("#toast");
 }
@@ -214,6 +257,19 @@ function bindEvents() {
     closeDeleteUserModal,
   );
   elements.confirmDeleteUserButton.addEventListener("click", confirmDeleteUser);
+  elements.closeRentalModalButton.addEventListener("click", closeRentalModal);
+  elements.cancelRentalButton.addEventListener("click", closeRentalModal);
+  elements.confirmRentalButton.addEventListener("click", confirmRental);
+  elements.toggleRentalStudentFormButton.addEventListener("click", openRentalStudentForm);
+  elements.cancelRentalStudentFormButton.addEventListener("click", closeRentalStudentForm);
+  elements.rentalStudentForm.addEventListener("submit", handleRentalStudentSubmit);
+  elements.rentalStudentSearchInput.addEventListener("input", (event) => {
+    state.rentalSearch = event.target.value.trim();
+    state.rentalUserId = null;
+    renderRentalModal();
+  });
+  elements.closeStudentLoansModalButton.addEventListener("click", closeStudentLoansModal);
+  elements.cancelStudentLoansModalButton.addEventListener("click", closeStudentLoansModal);
   elements.catalogPagination.addEventListener("click", handlePaginationClick);
 
   document.querySelectorAll("[data-card-action]").forEach((card) => {
@@ -256,6 +312,15 @@ function bindEvents() {
     }
     if (action.dataset.action === "return-loan") {
       openReturnModal(id);
+    }
+    if (action.dataset.action === "open-rental") {
+      openRentalModal(id);
+    }
+    if (action.dataset.action === "select-rental-user") {
+      selectRentalUser(id);
+    }
+    if (action.dataset.action === "view-user-loans") {
+      openStudentLoansModal(id);
     }
   });
 
@@ -304,7 +369,6 @@ async function handleLogin(event) {
       validated: true,
     };
 
-    localStorage.setItem(STORAGE.admin, JSON.stringify(state.admin));
     if (elements.adminEmail) {
       elements.adminEmail.textContent = state.admin.username;
     }
@@ -350,7 +414,7 @@ async function authenticateAdmin(username, password) {
 
 async function requestLoginJson(path, options = {}) {
   try {
-    const response = await fetchWithTimeout(buildApiUrl(path), options, 1200);
+    const response = await fetchWithTimeout(buildApiUrl(path), options, LOGIN_TIMEOUT_MS);
     if (!response.ok) {
       return null;
     }
@@ -478,18 +542,10 @@ async function loadData() {
   showLoading();
 
   try {
-    // Base do backend Java. Cada chamada completa a rota com /livros, /usuarios ou /emprestimos.
-    const [books, users, loans] = await Promise.all([
-      apiGet("/livros"),
-      apiGet("/usuarios"),
-      apiGet("/emprestimos"),
-    ]);
-
-    state.books = books.map(normalizeBook);
-    state.users = users.map(normalizeUser);
-    state.loans = loans.map(normalizeLoan);
-    state.apiOnline = true;
-    setApiStatus(true);
+    await refreshResources(["books", "users", "loans"], {
+      render: false,
+      resetCatalogPage: true,
+    });
   } catch (error) {
     state.books = createDemoBooks();
     state.users = createDemoUsers();
@@ -501,6 +557,37 @@ async function loadData() {
   state.catalogPage = 1;
   renderAll();
   hideLoading();
+}
+
+async function refreshResources(resources, options = {}) {
+  const uniqueResources = [...new Set(resources)];
+
+  await Promise.all(
+    uniqueResources.map(async (resource) => {
+      if (resource === "books") {
+        state.books = (await apiGet("/livros")).map(normalizeBook);
+      }
+
+      if (resource === "users") {
+        state.users = (await apiGet("/usuarios")).map(normalizeUser);
+      }
+
+      if (resource === "loans") {
+        state.loans = (await apiGet("/emprestimos")).map(normalizeLoan);
+      }
+    }),
+  );
+
+  state.apiOnline = true;
+  setApiStatus(true);
+
+  if (options.resetCatalogPage) {
+    state.catalogPage = 1;
+  }
+
+  if (options.render !== false) {
+    renderAll();
+  }
 }
 
 async function apiGet(path) {
@@ -581,6 +668,14 @@ function renderAll() {
   const bookId = getBookIdFromHash();
   if (bookId) {
     renderBookDetail(bookId);
+  }
+
+  if (state.rentalBookId && !elements.rentalModal.classList.contains("is-hidden")) {
+    renderRentalModal();
+  }
+
+  if (state.studentLoansUserId && !elements.studentLoansModal.classList.contains("is-hidden")) {
+    renderStudentLoansModal();
   }
 }
 
@@ -694,6 +789,7 @@ function handlePaginationClick(event) {
 function renderBookCard(book) {
   const rented = activeLoanCount(book.id);
   const stockClass = book.quantidade > 0 ? "available" : "unavailable";
+  const rentalDisabled = book.quantidade <= 0 ? "disabled" : "";
 
   return `
     <article class="book-card">
@@ -708,6 +804,9 @@ function renderBookCard(book) {
         </div>
         <div class="book-card-actions">
           <a class="small-button primary" href="#livro-${book.id}">Ver detalhes</a>
+          <button class="small-button" type="button" data-action="open-rental" data-id="${book.id}" ${rentalDisabled}>
+            Alugar
+          </button>
         </div>
       </div>
     </article>
@@ -749,6 +848,9 @@ function renderBookDetail(bookId) {
         <div class="detail-actions">
           <button class="small-button" type="button" data-action="edit-book" data-id="${book.id}">
             Editar cadastro
+          </button>
+          <button class="small-button primary" type="button" data-action="open-rental" data-id="${book.id}" ${book.quantidade <= 0 ? "disabled" : ""}>
+            Alugar livro
           </button>
           <button class="small-button danger" type="button" data-action="delete-book" data-id="${book.id}">
             Excluir livro
@@ -902,7 +1004,7 @@ function renderStudentRow(user) {
 
   return `
     <tr>
-      <td><strong>${escapeHtml(user.nome)}</strong><small>ID ${user.id}</small></td>
+      <td><strong>${escapeHtml(user.nome)}</strong></td>
       <td>${escapeHtml(formatCpf(user.cpf))}</td>
       <td>${escapeHtml(user.email || "Não informado")}</td>
       <td>${escapeHtml(user.telefone || "Não informado")}</td>
@@ -910,6 +1012,9 @@ function renderStudentRow(user) {
       <td><span class="${balanceClass}">${formatMoney(balance)}</span></td>
       <td>
         <div class="row-actions">
+          <button class="small-button primary" type="button" data-action="view-user-loans" data-id="${user.id}">
+            Ver empréstimos
+          </button>
           <button class="small-button" type="button" data-action="edit-user" data-id="${user.id}">
             Editar cadastro
           </button>
@@ -1024,6 +1129,45 @@ function filteredUsers() {
   return sortUsers(users);
 }
 
+function rentalUserMatches() {
+  const search = normalize(state.rentalSearch);
+  const searchDigits = onlyDigits(state.rentalSearch);
+
+  if (!search && !searchDigits) {
+    return [];
+  }
+
+  return state.users
+    .map((user) => ({
+      user,
+      score: getRentalUserMatchScore(user, search, searchDigits),
+    }))
+    .filter((item) => item.score < 99)
+    .sort((a, b) => a.score - b.score || a.user.nome.localeCompare(b.user.nome))
+    .map((item) => item.user);
+}
+
+function getRentalUserMatchScore(user, search, searchDigits) {
+  const name = normalize(user.nome);
+  const email = normalize(user.email);
+  const cpf = onlyDigits(user.cpf || user.CPF);
+  const phone = onlyDigits(user.telefone);
+  let score = 99;
+
+  if (search && name === search) score = Math.min(score, 0);
+  if (search && name.startsWith(search)) score = Math.min(score, 1);
+  if (searchDigits && cpf.startsWith(searchDigits)) score = Math.min(score, 1);
+  if (search && email.startsWith(search)) score = Math.min(score, 2);
+  if (searchDigits && phone.startsWith(searchDigits)) score = Math.min(score, 3);
+  if (search && name.includes(search)) score = Math.min(score, 4);
+  if (search && email.includes(search)) score = Math.min(score, 5);
+  if (searchDigits && (cpf.includes(searchDigits) || phone.includes(searchDigits))) {
+    score = Math.min(score, 5);
+  }
+
+  return score;
+}
+
 function sortUsers(users) {
   return [...users].sort((a, b) => {
     if (state.studentFilters.sort === "za") {
@@ -1051,6 +1195,11 @@ function clearStudentFilters() {
 
 async function handleStudentSubmit(event) {
   event.preventDefault();
+
+  if (state.savingUser) {
+    return;
+  }
+
   const formData = new FormData(elements.studentForm);
   const id = Number(formData.get("id"));
   const payload = {
@@ -1060,15 +1209,21 @@ async function handleStudentSubmit(event) {
     CPF: String(formData.get("CPF") || "").trim(),
   };
 
+  state.savingUser = true;
+  elements.studentSubmitButton.disabled = true;
+
   try {
     if (id) {
       await apiSend(`/usuarios/${id}`, "PUT", payload);
+      upsertLocalUser({ id, ...payload });
+      setApiStatus(true);
+      renderAll();
       showToast("Aluno atualizado na API.");
     } else {
       await apiSend("/usuarios", "POST", payload);
+      await refreshResources(["users"]);
       showToast("Aluno cadastrado na API.");
     }
-    await loadData();
   } catch (error) {
     upsertLocalUser({ id, ...payload });
     setApiStatus(false);
@@ -1082,10 +1237,17 @@ async function handleStudentSubmit(event) {
 
   clearStudentForm();
   location.hash = "#alunos";
+  state.savingUser = false;
+  elements.studentSubmitButton.disabled = false;
 }
 
 async function handleBookSubmit(event) {
   event.preventDefault();
+
+  if (state.savingBook) {
+    return;
+  }
+
   const formData = new FormData(elements.bookForm);
   const id = Number(formData.get("id"));
   const payload = {
@@ -1097,15 +1259,21 @@ async function handleBookSubmit(event) {
     genero: String(formData.get("genero") || "").trim(),
   };
 
+  state.savingBook = true;
+  elements.bookSubmitButton.disabled = true;
+
   try {
     if (id) {
       await apiSend(`/livros/${id}`, "PUT", payload);
+      upsertLocalBook({ id, ...payload });
+      setApiStatus(true);
+      renderAll();
       showToast("Livro atualizado na API.");
     } else {
       await apiSend("/livros", "POST", payload);
+      await refreshResources(["books"]);
       showToast("Livro cadastrado na API.");
     }
-    await loadData();
   } catch (error) {
     console.error(error);
     upsertLocalBook({ id, ...payload });
@@ -1114,16 +1282,21 @@ async function handleBookSubmit(event) {
     renderAll();
   }
 
-  clearBookForm();
+  if (!id) {
+    focusCatalogOnBook(payload.titulo);
+  }
 
-  const returnHash = id ? state.bookEditReturnHash || `#livro-${id}` : "#home";
+  const returnHash = id ? state.bookEditReturnHash || `#livro-${id}` : "#catalogo";
   clearBookForm();
   state.bookEditReturnHash = null;
 
   location.hash = returnHash;
-  if (!id) {
+  if (!id && location.hash === "#catalogo") {
     scrollToCatalog();
   }
+
+  state.savingBook = false;
+  elements.bookSubmitButton.disabled = false;
 }
 
 function prepareBookEdit(bookId) {
@@ -1147,6 +1320,20 @@ function clearBookForm() {
   elements.bookForm.elements.id.value = "";
   elements.bookSubmitButton.textContent = "Salvar livro";
   state.bookEditReturnHash = null;
+}
+
+function focusCatalogOnBook(title) {
+  state.filters.search = title;
+  state.filters.genre = "";
+  state.filters.status = "";
+  state.filters.sort = "title";
+  state.catalogPage = 1;
+
+  elements.searchInput.value = title;
+  elements.genreFilter.value = "";
+  elements.availabilityFilter.value = "";
+  elements.sortFilter.value = "title";
+  renderCatalog();
 }
 
 function prepareUserEdit(userId) {
@@ -1181,12 +1368,14 @@ function openReturnModal(loanId) {
   const user = findUser(loan.usuarioId);
   const book = findBook(loan.livroId);
   state.selectedLoanId = loan.id;
+  state.returnContext = !elements.studentLoansModal.classList.contains("is-hidden") ? "student-loans" : "default";
   elements.confirmModalText.textContent = `Confirme se "${book.titulo}" foi devolvido por ${user.nome}. A multa será encerrada no sistema.`;
   elements.confirmModal.classList.remove("is-hidden");
 }
 
 function closeReturnModal() {
   state.selectedLoanId = null;
+  state.returnContext = null;
   elements.confirmModal.classList.add("is-hidden");
 }
 
@@ -1218,14 +1407,413 @@ function closeDeleteUserModal() {
   elements.deleteUserModal.classList.add("is-hidden");
 }
 
+function openStudentLoansModal(userId) {
+  const user = findUser(userId);
+  if (!user.id) return;
+
+  state.studentLoansUserId = user.id;
+  renderStudentLoansModal();
+  elements.studentLoansModal.classList.remove("is-hidden");
+}
+
+function closeStudentLoansModal() {
+  state.studentLoansUserId = null;
+  elements.studentLoansModal.classList.add("is-hidden");
+}
+
+function renderStudentLoansModal() {
+  const user = findUser(state.studentLoansUserId);
+  if (!user.id) return;
+
+  const loans = state.loans
+    .filter((loan) => loan.usuarioId === user.id)
+    .sort((a, b) => Number(isLoanActive(b)) - Number(isLoanActive(a)) || compareDates(b.dataEmprestimo, a.dataEmprestimo));
+
+  elements.studentLoansTitle.textContent = user.nome;
+
+  if (!loans.length) {
+    elements.studentLoansContent.innerHTML = `<p class="empty-state">Nenhum empréstimo registrado.</p>`;
+    return;
+  }
+
+  elements.studentLoansContent.innerHTML = `
+    <div class="student-loan-summary">
+      <span>Ativos<strong>${userActiveLoanCount(user.id)}</strong></span>
+      <span>Saldo<strong>${formatMoney(getUserBalance(user.id))}</strong></span>
+    </div>
+    <div class="table-card">
+      <table class="data-table student-loans-table">
+        <thead>
+          <tr>
+            <th>Livro</th>
+            <th>Retirada</th>
+            <th>Prevista</th>
+            <th>Status</th>
+            <th>Multa</th>
+            <th>Ação</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${loans.map(renderStudentLoanRow).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderStudentLoanRow(loan) {
+  const book = findBook(loan.livroId);
+  const lateDays = getDaysLate(loan);
+  const status = isLoanActive(loan)
+    ? lateDays > 0
+      ? "Atrasado"
+      : "Emprestado"
+    : "Devolvido";
+  const fine = getLoanFine(loan);
+  const actionLabel = fine > 0 ? "Anular multa" : "Tirar vínculo";
+
+  return `
+    <tr>
+      <td><strong>${escapeHtml(book.titulo)}</strong><small>${escapeHtml(book.autor || "")}</small></td>
+      <td>${formatDate(loan.dataEmprestimo)}</td>
+      <td>${formatDate(getDueDate(loan))}</td>
+      <td>${renderStatus(status)}</td>
+      <td><span class="${fine > 0 ? "fine-value" : "balance-zero"}">${formatMoney(fine)}</span></td>
+      <td>
+        ${isLoanActive(loan)
+          ? `<button class="small-button ${fine > 0 ? "danger" : ""}" type="button" data-action="return-loan" data-id="${loan.id}">${actionLabel}</button>`
+          : `<span class="status-pill available">Encerrado</span>`}
+      </td>
+    </tr>
+  `;
+}
+
+function openRentalModal(bookId) {
+  const book = findBook(bookId);
+  if (!book.id) return;
+
+  if (Number(book.quantidade || 0) <= 0) {
+    showToast("Livro sem estoque disponível para empréstimo.");
+    return;
+  }
+
+  state.rentalBookId = book.id;
+  state.rentalUserId = null;
+  state.rentalSearch = "";
+  elements.rentalModal.classList.remove("is-anchored");
+  elements.rentalModal.style.removeProperty("--rental-modal-top");
+  elements.rentalStudentSearchInput.value = "";
+  closeRentalStudentForm();
+  elements.rentalModal.classList.remove("is-hidden");
+  renderRentalModal();
+  requestAnimationFrame(() => {
+    anchorRentalModal();
+    elements.rentalStudentSearchInput.focus();
+  });
+}
+
+function closeRentalModal() {
+  state.rentalBookId = null;
+  state.rentalUserId = null;
+  state.rentalSearch = "";
+  state.rentalMode = "select";
+  state.savingRental = false;
+  state.savingRentalUser = false;
+  elements.rentalStudentSearchInput.value = "";
+  elements.confirmRentalButton.disabled = false;
+  elements.confirmRentalButton.textContent = "Confirmar empréstimo";
+  closeRentalStudentForm();
+  elements.rentalModal.classList.remove("is-anchored");
+  elements.rentalModal.style.removeProperty("--rental-modal-top");
+  elements.rentalModal.classList.add("is-hidden");
+}
+
+function anchorRentalModal() {
+  const card = elements.rentalModal.querySelector(".rental-modal-card");
+
+  if (!card || elements.rentalModal.classList.contains("is-hidden")) {
+    return;
+  }
+
+  const top = Math.max(20, Math.round(card.getBoundingClientRect().top));
+  elements.rentalModal.style.setProperty("--rental-modal-top", `${top}px`);
+  elements.rentalModal.classList.add("is-anchored");
+}
+
+function renderRentalModal() {
+  if (!state.rentalBookId || elements.rentalModal.classList.contains("is-hidden")) {
+    return;
+  }
+
+  const book = findBook(state.rentalBookId);
+  const stock = Number(book.quantidade || 0);
+  const active = activeLoans().filter((loan) => loan.livroId === book.id);
+  const selected = state.rentalUserId ? findUser(state.rentalUserId) : null;
+  const blockedLoan = selected?.id ? getUserActiveLoan(selected.id) : null;
+
+  setRentalMode(state.rentalMode);
+  elements.rentalBookSummary.innerHTML = renderRentalBookSummary(book, active);
+  elements.rentalSelectedStudent.innerHTML = renderRentalSelectedStudent(selected, blockedLoan);
+  elements.rentalStudentResults.innerHTML = renderRentalStudentResults();
+
+  elements.confirmRentalButton.disabled = state.savingRental || stock <= 0 || !selected?.id || Boolean(blockedLoan);
+  elements.confirmRentalButton.textContent = state.savingRental ? "Registrando..." : "Confirmar empréstimo";
+}
+
+function renderRentalBookSummary(book, activeLoansForBook) {
+  const stock = Number(book.quantidade || 0);
+  const rented = activeLoansForBook.length;
+
+  return `
+    <div class="rental-book-card">
+      ${renderBookCover(book)}
+      <div>
+        <h3>${escapeHtml(book.titulo)}</h3>
+        <p>${escapeHtml(book.autor || "Autor não informado")}</p>
+        <div class="rental-book-stats">
+          <span>Estoque<strong>${stock}</strong></span>
+          <span>Alugados<strong>${rented}</strong></span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderRentalSelectedStudent(user, blockedLoan) {
+  if (!user?.id) {
+    return `<div class="rental-placeholder">Nenhum aluno selecionado</div>`;
+  }
+
+  const activeBook = blockedLoan ? findBook(blockedLoan.livroId) : null;
+
+  return `
+    <div class="rental-selected-card ${blockedLoan ? "has-warning" : ""}">
+      <div>
+        <strong>${escapeHtml(user.nome)}</strong>
+        <span>${escapeHtml(formatCpf(user.cpf))}</span>
+      </div>
+      <small>${blockedLoan ? `Com: ${escapeHtml(activeBook.titulo)}` : "Disponível"}</small>
+    </div>
+  `;
+}
+
+function renderRentalStudentResults() {
+  if (!state.rentalSearch) {
+    return `<p class="rental-inline-hint">Busque um aluno.</p>`;
+  }
+
+  const users = rentalUserMatches();
+
+  if (!users.length) {
+    return `<p class="empty-state compact-empty">Nenhum aluno encontrado.</p>`;
+  }
+
+  return users
+    .slice(0, 5)
+    .map((user) => {
+      const activeLoan = getUserActiveLoan(user.id);
+      const selected = state.rentalUserId === user.id;
+      const activeBook = activeLoan ? findBook(activeLoan.livroId) : null;
+
+      return `
+        <button
+          class="rental-student-option ${selected ? "is-selected" : ""}"
+          type="button"
+          data-action="select-rental-user"
+          data-id="${user.id}"
+          ${activeLoan ? "disabled" : ""}
+        >
+          <span>
+            <strong>${escapeHtml(user.nome)}</strong>
+            <small>${escapeHtml(formatCpf(user.cpf))}</small>
+          </span>
+          <span class="rental-student-meta">
+            ${activeLoan ? `<em>${escapeHtml(activeBook.titulo)}</em>` : `<small>Disponível</small>`}
+          </span>
+        </button>
+      `;
+    })
+    .join("");
+}
+
+function selectRentalUser(userId) {
+  const user = findUser(userId);
+  const book = findBook(state.rentalBookId);
+  if (!user.id || !book.id) return;
+
+  const activeLoan = getUserActiveLoan(user.id);
+  if (activeLoan) {
+    const activeBook = findBook(activeLoan.livroId);
+    showToast(`${user.nome} já está com "${activeBook.titulo}".`);
+    return;
+  }
+
+  state.rentalUserId = user.id;
+  state.rentalSearch = user.nome;
+  elements.rentalStudentSearchInput.value = user.nome;
+  closeRentalStudentForm();
+  renderRentalModal();
+}
+
+function openRentalStudentForm() {
+  state.rentalMode = "create";
+  setRentalMode("create");
+  requestAnimationFrame(() => elements.rentalStudentForm.elements.nome.focus());
+}
+
+function closeRentalStudentForm() {
+  state.savingRentalUser = false;
+  state.rentalMode = "select";
+  elements.rentalStudentForm.reset();
+  elements.rentalStudentSubmitButton.disabled = false;
+  elements.rentalStudentSubmitButton.textContent = "Cadastrar";
+  setRentalMode("select");
+}
+
+function setRentalMode(mode) {
+  const creating = mode === "create";
+  state.rentalMode = creating ? "create" : "select";
+  elements.rentalModalEyebrow.textContent = creating ? "Aluno" : "Empréstimo";
+  elements.rentalModalTitle.textContent = creating ? "Cadastrar aluno" : "Registrar aluguel";
+  elements.rentalSelectStep.classList.toggle("is-hidden", creating);
+  elements.rentalStudentForm.classList.toggle("is-hidden", !creating);
+  elements.rentalActions.classList.toggle("is-hidden", creating);
+}
+
+async function handleRentalStudentSubmit(event) {
+  event.preventDefault();
+
+  if (state.savingRentalUser) {
+    return;
+  }
+
+  const formData = new FormData(elements.rentalStudentForm);
+  const payload = {
+    nome: String(formData.get("nome") || "").trim(),
+    email: normalizeLoginEmail(formData.get("email")),
+    telefone: String(formData.get("telefone") || "").trim(),
+    CPF: String(formData.get("CPF") || "").trim(),
+  };
+  const existing = findUserByCpfOrEmail(payload.CPF, payload.email);
+
+  if (existing) {
+    state.rentalUserId = existing.id;
+    state.rentalSearch = existing.nome;
+    elements.rentalStudentSearchInput.value = existing.nome;
+    closeRentalStudentForm();
+    renderRentalModal();
+    showToast("Aluno já cadastrado selecionado.");
+    return;
+  }
+
+  state.savingRentalUser = true;
+  elements.rentalStudentSubmitButton.disabled = true;
+  elements.rentalStudentSubmitButton.textContent = "Salvando...";
+
+  try {
+    await apiSend("/usuarios", "POST", payload);
+    await refreshResources(["users"]);
+    showToast("Aluno cadastrado na API.");
+  } catch (error) {
+    upsertLocalUser(payload);
+    setApiStatus(false);
+    renderAll();
+    showToast("Aluno cadastrado nos dados locais.");
+  } finally {
+    state.savingRentalUser = false;
+  }
+
+  const created = findUserByCpfOrEmail(payload.CPF, payload.email);
+  if (created) {
+    state.rentalUserId = created.id;
+    state.rentalSearch = created.nome;
+    elements.rentalStudentSearchInput.value = created.nome;
+  }
+
+  closeRentalStudentForm();
+  renderRentalModal();
+}
+
+async function confirmRental() {
+  if (state.savingRental) {
+    return;
+  }
+
+  const book = findBook(state.rentalBookId);
+  const user = findUser(state.rentalUserId);
+
+  if (!book.id || !user.id) {
+    showToast("Selecione um livro e um aluno para registrar o empréstimo.");
+    return;
+  }
+
+  if (Number(book.quantidade || 0) <= 0) {
+    showToast("Livro sem estoque disponível para empréstimo.");
+    return;
+  }
+
+  const activeLoan = getUserActiveLoan(user.id);
+  if (activeLoan) {
+    const activeBook = findBook(activeLoan.livroId);
+    showToast(`${user.nome} já está com "${activeBook.titulo}".`);
+    renderRentalModal();
+    return;
+  }
+
+  state.savingRental = true;
+  renderRentalModal();
+
+  try {
+    await apiSend("/emprestimos", "POST", {
+      usuarioId: user.id,
+      livroId: book.id,
+    });
+    showToast("Empréstimo registrado na API.");
+    await refreshResources(["books", "loans"]);
+    closeRentalModal();
+  } catch (error) {
+    const message = String(error.message || "");
+
+    if (message.includes("emprestimo ativo") || message.includes("empréstimo ativo")) {
+      showToast("Aluno já possui empréstimo ativo.");
+      await refreshResources(["loans"]);
+      state.savingRental = false;
+      renderRentalModal();
+      return;
+    }
+
+    if (message.includes("indisponivel") || message.includes("indisponível")) {
+      showToast("Livro indisponível para empréstimo.");
+      await refreshResources(["books", "loans"]);
+      state.savingRental = false;
+      renderRentalModal();
+      return;
+    }
+
+    try {
+      registerLocalLoan(user.id, book.id);
+      setApiStatus(false);
+      showToast("Empréstimo registrado nos dados locais.");
+      renderAll();
+      closeRentalModal();
+    } catch (localError) {
+      showToast(localError.message || "Não foi possível registrar o empréstimo.");
+      state.savingRental = false;
+      renderRentalModal();
+    }
+  }
+}
+
 async function confirmDeleteBook() {
   const bookId = state.selectedBookId;
   if (!bookId) return;
 
   try {
     await apiSend(`/livros/${bookId}`, "DELETE");
+    removeLocalBook(bookId);
+    setApiStatus(true);
+    renderAll();
     showToast("Livro excluído da API.");
-    await loadData();
   } catch (error) {
     removeLocalBook(bookId);
     setApiStatus(false);
@@ -1244,8 +1832,10 @@ async function confirmDeleteUser() {
 
   try {
     await apiSend(`/usuarios/${userId}`, "DELETE");
+    removeLocalUser(userId);
+    setApiStatus(true);
+    renderAll();
     showToast("Aluno excluído da API.");
-    await loadData();
   } catch (error) {
     removeLocalUser(userId);
     setApiStatus(false);
@@ -1260,11 +1850,14 @@ async function confirmDeleteUser() {
 async function confirmReturnLoan() {
   const loanId = state.selectedLoanId;
   if (!loanId) return;
+  const returnContext = state.returnContext;
 
   try {
     await apiSend(`/emprestimos/${loanId}/devolver`, "PUT");
+    markLoanReturnedLocally(loanId);
+    setApiStatus(true);
+    renderAll();
     showToast("Devolução registrada na API.");
-    await loadData();
   } catch (error) {
     markLoanReturnedLocally(loanId);
     setApiStatus(false);
@@ -1273,6 +1866,11 @@ async function confirmReturnLoan() {
   }
 
   closeReturnModal();
+  if (returnContext === "student-loans") {
+    renderStudentLoansModal();
+    return;
+  }
+
   if (location.hash !== "#atrasos") {
     location.hash = "#atrasos";
   }
@@ -1290,6 +1888,30 @@ function markLoanReturnedLocally(loanId) {
   if (book) {
     book.quantidade = Number(book.quantidade || 0) + 1;
   }
+}
+
+function registerLocalLoan(userId, bookId) {
+  const book = state.books.find((item) => item.id === Number(bookId));
+  if (!book || Number(book.quantidade || 0) <= 0) {
+    throw new Error("Livro sem estoque disponível para empréstimo.");
+  }
+
+  if (getUserActiveLoan(userId)) {
+    throw new Error("Este aluno já possui um empréstimo ativo.");
+  }
+
+  book.quantidade = Number(book.quantidade || 0) - 1;
+  state.loans.push(
+    normalizeLoan({
+      id: nextId(state.loans),
+      usuarioId: userId,
+      livroId: bookId,
+      dataEmprestimo: todayIso(),
+      dataPrevistaDevolucao: addDaysIso(todayIso(), LOAN_DAYS),
+      status: "emprestado",
+      multa: 0,
+    })
+  );
 }
 
 function handleMetricAction(action) {
@@ -1428,6 +2050,10 @@ function userActiveLoanCount(userId) {
     .length;
 }
 
+function getUserActiveLoan(userId) {
+  return activeLoans().find((loan) => loan.usuarioId === Number(userId)) || null;
+}
+
 function getUserBalance(userId) {
   return activeLoans()
     .filter((loan) => loan.usuarioId === Number(userId))
@@ -1455,6 +2081,20 @@ function findUser(userId) {
       cpf: "",
     }
   );
+}
+
+function findUserByCpfOrEmail(cpf, email) {
+  const cpfDigits = onlyDigits(cpf);
+  const normalizedEmail = normalize(email);
+
+  return state.users.find((user) => {
+    const userCpf = onlyDigits(user.cpf || user.CPF);
+    const userEmail = normalize(user.email);
+    return Boolean(
+      (cpfDigits && userCpf === cpfDigits) ||
+      (normalizedEmail && userEmail === normalizedEmail)
+    );
+  });
 }
 
 function getDueDate(loan) {
@@ -1764,6 +2404,10 @@ function normalize(value) {
     .trim();
 }
 
+function onlyDigits(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
 function normalizeDate(value) {
   if (!value || value === "null") return null;
   const text = String(value).slice(0, 10);
@@ -1797,15 +2441,6 @@ function dateToIso(date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-}
-
-function readJson(key, fallback) {
-  try {
-    const value = localStorage.getItem(key);
-    return value ? JSON.parse(value) : fallback;
-  } catch (error) {
-    return fallback;
-  }
 }
 
 function escapeHtml(value) {
