@@ -390,26 +390,14 @@ async function authenticateAdmin(username, password) {
     email: username,
     password,
   };
-  const loginPaths = ["/admins/login", "/admin/login", "/login", "/auth/login"];
 
-  for (const path of loginPaths) {
-    const data = await requestLoginJson(path, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(loginPayload),
-    });
+  const data = await requestLoginJson("/admins/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(loginPayload),
+  });
 
-    if (data) {
-      return normalizeAdminLoginResponse(data, username);
-    }
-  }
-
-  const admins = await requestLoginJson("/admins");
-  if (Array.isArray(admins)) {
-    return findMatchingAdmin(admins, username, password);
-  }
-
-  return null;
+  return data ? normalizeAdminLoginResponse(data, username) : null;
 }
 
 async function requestLoginJson(path, options = {}) {
@@ -431,21 +419,6 @@ function normalizeAdminLoginResponse(data, username) {
   return {
     username: admin.username || admin.login || admin.email || username,
   };
-}
-
-function findMatchingAdmin(admins, username, password) {
-  const usernames = adminUsernameCandidates(username).map(normalize);
-  return (
-    admins.find((admin) => {
-      const adminUsername = normalize(
-        admin.username || admin.login || admin.email,
-      );
-      return (
-        usernames.includes(adminUsername) &&
-        String(admin.password || admin.senha || "") === password
-      );
-    }) || null
-  );
 }
 
 function adminUsernameCandidates(username) {
